@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 import { useSequenceStore } from './store/sequence';
 import AlignmentView from './components/AlignmentView.vue';
 import PhyloTree from './components/PhyloTree.vue';
 import GCChart from './components/GCChart.vue';
+import SampleInfoPanel from './components/SampleInfoPanel.vue';
 
 const store = useSequenceStore();
 const gcSeqId = ref('');
@@ -18,6 +19,12 @@ onMounted(() => {
     gcSeqId.value = store.sequences[0].id;
   }
 });
+
+watch(() => store.sequences, (seqs) => {
+  if (seqs.length > 0 && !gcSeqId.value) {
+    gcSeqId.value = seqs[0].id;
+  }
+}, { deep: true });
 
 function handleRunAlignment() {
   if (!store.selectedSeq1 || !store.selectedSeq2) return;
@@ -57,6 +64,10 @@ function handleLoadMock() {
   store.loadMockSequences();
   gcSeqId.value = store.sequences[0]?.id || '';
 }
+
+function handleSelectSeq(seqId: string) {
+  store.setSelectedSeqForPanel(seqId);
+}
 </script>
 
 <template>
@@ -82,69 +93,113 @@ function handleLoadMock() {
     </header>
 
     <div class="p-4 space-y-4">
-      <!-- Sequence List Panel -->
-      <section class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
-        <div class="px-4 py-2 bg-gray-800 border-b border-gray-700 flex items-center justify-between">
-          <h2 class="text-sm font-semibold text-gray-300">序列列表</h2>
-          <span class="text-xs text-gray-500">{{ store.sequences.length }} 条序列</span>
-        </div>
+      <!-- Top Row: Sequence List + Sample Info Panel -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <!-- Sequence List Panel -->
+        <section class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+          <div class="px-4 py-2 bg-gray-800 border-b border-gray-700 flex items-center justify-between">
+            <h2 class="text-sm font-semibold text-gray-300">序列列表</h2>
+            <span class="text-xs text-gray-500">
+              <template v-if="store.filterKeyword || store.filterSpecies">
+                {{ store.filteredSequences.length }} / {{ store.sequences.length }} 条
+              </template>
+              <template v-else>
+                {{ store.sequences.length }} 条序列
+              </template>
+            </span>
+          </div>
 
-        <!-- Add sequence form -->
-        <div class="px-4 py-2 bg-gray-850 border-b border-gray-700 flex items-center gap-2" style="background-color: #1a2234;">
-          <input
-            v-model="newSeqName"
-            type="text"
-            placeholder="序列名称"
-            class="px-3 py-1.5 bg-gray-900 border border-gray-600 rounded text-gray-100 text-sm placeholder-gray-500 focus:outline-none focus:border-emerald-500 w-48"
-          />
-          <input
-            v-model="newSeqData"
-            type="text"
-            placeholder="序列数据 (ACGT...)"
-            class="flex-1 px-3 py-1.5 bg-gray-900 border border-gray-600 rounded text-gray-100 text-sm placeholder-gray-500 focus:outline-none focus:border-emerald-500 font-mono"
-          />
-          <button
-            @click="handleAddSequence"
-            class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm rounded transition-colors border border-gray-600"
-          >
-            添加
-          </button>
-        </div>
+          <!-- Add sequence form -->
+          <div class="px-4 py-2 bg-gray-850 border-b border-gray-700 flex items-center gap-2 flex-wrap" style="background-color: #1a2234;">
+            <input
+              v-model="newSeqName"
+              type="text"
+              placeholder="序列名称"
+              class="px-3 py-1.5 bg-gray-900 border border-gray-600 rounded text-gray-100 text-sm placeholder-gray-500 focus:outline-none focus:border-emerald-500 w-40"
+            />
+            <input
+              v-model="newSeqData"
+              type="text"
+              placeholder="序列数据 (ACGT...)"
+              class="flex-1 px-3 py-1.5 bg-gray-900 border border-gray-600 rounded text-gray-100 text-sm placeholder-gray-500 focus:outline-none focus:border-emerald-500 font-mono min-w-[200px]"
+            />
+            <button
+              @click="handleAddSequence"
+              class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm rounded transition-colors border border-gray-600"
+            >
+              添加
+            </button>
+          </div>
 
-        <!-- Sequence table -->
-        <div class="max-h-48 overflow-auto">
-          <table class="w-full text-sm">
-            <thead class="bg-gray-800 sticky top-0">
-              <tr class="text-gray-400 text-left">
-                <th class="px-4 py-1.5 font-medium">ID</th>
-                <th class="px-4 py-1.5 font-medium">名称</th>
-                <th class="px-4 py-1.5 font-medium w-20">长度</th>
-                <th class="px-4 py-1.5 font-medium w-16">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="seq in store.sequences" :key="seq.id" class="border-t border-gray-700 hover:bg-gray-800/50">
-                <td class="px-4 py-1.5 text-cyan-400 font-mono text-xs">{{ seq.id }}</td>
-                <td class="px-4 py-1.5 text-gray-200">{{ seq.name }}</td>
-                <td class="px-4 py-1.5 text-gray-400">{{ seq.data.length }} bp</td>
-                <td class="px-4 py-1.5">
-                  <button
-                    @click="store.removeSequence(seq.id)"
-                    class="text-red-400 hover:text-red-300 text-xs"
-                  >
-                    删除
-                  </button>
-                </td>
-              </tr>
-              <tr v-if="store.sequences.length === 0">
-                <td colspan="4" class="px-4 py-6 text-center text-gray-500 text-sm">
-                  暂无序列 — 点击"加载示例序列"添加
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
+          <!-- Sequence table -->
+          <div class="max-h-72 overflow-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-800 sticky top-0">
+                <tr class="text-gray-400 text-left">
+                  <th class="px-3 py-1.5 font-medium w-8"></th>
+                  <th class="px-3 py-1.5 font-medium">名称</th>
+                  <th class="px-3 py-1.5 font-medium">物种</th>
+                  <th class="px-3 py-1.5 font-medium w-20">长度</th>
+                  <th class="px-3 py-1.5 font-medium w-16">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="seq in store.filteredSequences"
+                  :key="seq.id"
+                  class="border-t border-gray-700 cursor-pointer transition-colors"
+                  :class="{
+                    'bg-emerald-900/30': store.selectedSeqForPanel === seq.id,
+                    'hover:bg-gray-800/50': store.selectedSeqForPanel !== seq.id
+                  }"
+                  @click="handleSelectSeq(seq.id)"
+                >
+                  <td class="px-3 py-1.5">
+                    <span
+                      v-if="store.selectedSeqForPanel === seq.id"
+                      class="w-2 h-2 bg-emerald-400 rounded-full inline-block"
+                    ></span>
+                  </td>
+                  <td class="px-3 py-1.5">
+                    <div class="text-gray-200">{{ seq.name }}</div>
+                    <div class="text-xs text-cyan-400 font-mono">{{ seq.id }}</div>
+                  </td>
+                  <td class="px-3 py-1.5">
+                    <template v-if="seq.sampleInfo.species">
+                      <span class="text-xs px-2 py-0.5 bg-purple-900/50 text-purple-300 rounded border border-purple-700/50">
+                        {{ seq.sampleInfo.species }}
+                      </span>
+                    </template>
+                    <span v-else class="text-gray-600 text-xs italic">未标注</span>
+                  </td>
+                  <td class="px-3 py-1.5 text-gray-400">{{ seq.data.length }} bp</td>
+                  <td class="px-3 py-1.5" @click.stop>
+                    <button
+                      @click="store.removeSequence(seq.id)"
+                      class="text-red-400 hover:text-red-300 text-xs"
+                    >
+                      删除
+                    </button>
+                  </td>
+                </tr>
+                <tr v-if="store.filteredSequences.length === 0">
+                  <td colspan="5" class="px-4 py-6 text-center text-gray-500 text-sm">
+                    <template v-if="store.filterKeyword || store.filterSpecies">
+                      没有匹配的序列 — 试试清除筛选条件
+                    </template>
+                    <template v-else>
+                      暂无序列 — 点击"加载示例序列"添加
+                    </template>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- Sample Info Panel -->
+        <SampleInfoPanel />
+      </div>
 
       <!-- Middle Row: Alignment + GC Content -->
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">

@@ -1,8 +1,19 @@
+export interface SampleInfo {
+  species: string;
+  collectionDate: string;
+  collectionLocation: string;
+  collector: string;
+  tissueType: string;
+  storageCondition: string;
+  notes: string;
+}
+
 export interface Sequence {
   id: string;
   name: string;
-  data: string;  // ACGT nucleotides
+  data: string;
   length: number;
+  sampleInfo: SampleInfo;
 }
 
 export interface AlignmentResult {
